@@ -1,0 +1,28 @@
+name: PVPMaster
+version: '${project.version}'
+main: tech.lech2td.pvpmaster.PVPMaster
+api-version: 1.19
+depend: [ Multiverse-Core ]
+authors: [ LeChocolatChaud ]
+commands:
+  in:
+    permission: pvpmaster.in
+  out:
+    permission: pvpmaster.out
+  start:
+    permission: pvpmaster.start
+  end:
+    permission: pvpmaster.end
+  reset:
+    permission: pvpmaster.reset
+permissions:
+  pvpmaster.in:
+    default: true
+  pvpmaster.out:
+    default: true
+  pvpmaster.start:
+    default: op
+  pvpmaster.end:
+    default: op
+  pvpmaster.reset:
+    default: op
