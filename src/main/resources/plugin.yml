@@ -5,24 +5,26 @@ api-version: 1.19
 depend: [ Multiverse-Core ]
 authors: [ LeChocolatChaud ]
 commands:
-  in:
-    permission: pvpmaster.in
-  out:
-    permission: pvpmaster.out
-  start:
-    permission: pvpmaster.start
-  end:
-    permission: pvpmaster.end
-  reset:
-    permission: pvpmaster.reset
+  pvpmaster:
+    description: Root command for PVPMaster games.
+    permission: pvpmaster.default
+    permission-message: You have no permission to participate in PVPMaster games!
+    aliases: pm
+    usage: "See /<command> help"
 permissions:
-  pvpmaster.in:
+  pvpmaster.default:
     default: true
-  pvpmaster.out:
-    default: true
-  pvpmaster.start:
+    description: All the basic permissions for one to play the game.
+    children:
+      pvpmaster.in: true
+      pvpmaster.out: true
+      pvpmaster.help: true
+  pvpmaster.admin:
     default: op
-  pvpmaster.end:
-    default: op
-  pvpmaster.reset:
-    default: op
+    description: All the permissions for game admins.
+    children:
+      pvpmaster.start: true
+      pvpmaster.end: true
+      pvpmaster.clear: true
+      pvpmaster.register: true
+      pvpmaster.unregister: true

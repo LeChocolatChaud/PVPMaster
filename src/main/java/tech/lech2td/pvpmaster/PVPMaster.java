@@ -5,10 +5,12 @@ import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import com.onarandombox.MultiverseCore.api.MultiverseWorld;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
@@ -23,137 +25,262 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
 public final class PVPMaster extends JavaPlugin implements Listener {
-    // multiverse related
-    private MultiverseCore mvCore;
     private MVWorldManager mvwm;
 
     // logic related
     private ArrayList<Player> players;
+    private HashMap<String, Team> teams;
     private Scoreboard scoreboard;
-    private ArrayList<Team> teams;
     private int timerTask;
     private int meetupTask;
 
-    // constants
-    private final NamedTextColor[] namedTextColors = new NamedTextColor[] {NamedTextColor.RED, NamedTextColor.BLUE, NamedTextColor.YELLOW, NamedTextColor.GREEN};
+    // tab completes
+    private final String[] subcommands = new String[] {"in", "out", "start", "end", "clear", "register", "unregister", "help"};
 
     // configs
-    private int seconds = 600;
+    private int seconds = 630;
     private int teamCount = 2;
 
-    // prevent unexpected start
+    // some flags
     private boolean running = false;
+    private boolean randomTeaming = false;
 
     @Override
     public void onEnable() {
         // Plugin startup logic
 
         // multiverse related
-        mvCore = (MultiverseCore) Bukkit.getServer().getPluginManager().getPlugin("Multiverse-Core");
+        MultiverseCore mvCore = (MultiverseCore) Bukkit.getServer().getPluginManager().getPlugin("Multiverse-Core");
+        assert mvCore != null;
         mvwm = mvCore.getMVWorldManager();
 
         // logic related inits
         players = new ArrayList<>();
-        teams = new ArrayList<>();
+        teams = new HashMap<>();
         scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
 
+        teams.put("red", scoreboard.registerNewTeam("pvpred"));
+        teams.put("blue", scoreboard.registerNewTeam("pvpblue"));
+        teams.put("yellow", scoreboard.registerNewTeam("pvpyellow"));
+        teams.put("green", scoreboard.registerNewTeam("pvpgreen"));
+
+        teams.get("red").color(NamedTextColor.RED);
+        teams.get("blue").color(NamedTextColor.BLUE);
+        teams.get("yellow").color(NamedTextColor.YELLOW);
+        teams.get("green").color(NamedTextColor.GREEN);
+
         // commands and listeners
-        Bukkit.getPluginCommand("in").setExecutor(this);
-        Bukkit.getPluginCommand("out").setExecutor(this);
-        Bukkit.getPluginCommand("start").setExecutor(this);
-        Bukkit.getPluginCommand("end").setExecutor(this);
+        PluginCommand command = Objects.requireNonNull(Bukkit.getPluginCommand("pvpmaster"));
+        command.setExecutor(this);
+        command.setTabCompleter(this);
         Bukkit.getPluginManager().registerEvents(this, this);
+    }
+
+    private CheckResult checkSender(CommandSender sender, String subcommand) {
+        if (!(sender.hasPermission("pvpmaster.in") &&
+                sender.hasPermission("pvpmaster.out") &&
+                sender.hasPermission("pvpmaster.start") &&
+                sender.hasPermission("pvpmaster.end") &&
+                sender.hasPermission("pvpmaster.clear") &&
+                sender.hasPermission("pvpmaster.register") &&
+                sender.hasPermission("pvpmaster.unregister") &&
+                sender.hasPermission("pvpmaster.help")))
+            return CheckResult.NO_PERMISSION;
+        switch (subcommand) {
+            case "in" -> {
+                if (!(sender instanceof Player)) return CheckResult.PLAYER_ONLY;
+                if (!sender.hasPermission("pvpmaster.in")) return CheckResult.NO_PERMISSION;
+            }
+            case "out" -> {
+                if (!(sender instanceof Player)) return CheckResult.PLAYER_ONLY;
+                if (!sender.hasPermission("pvpmaster.out")) return CheckResult.NO_PERMISSION;
+            }
+            case "start" -> {
+                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender))
+                    return CheckResult.PLAYER_AND_CONSOLE_ONLY;
+                if (!sender.hasPermission("pvpmaster.start")) return CheckResult.NO_PERMISSION;
+            }
+            case "end" -> {
+                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender))
+                    return CheckResult.PLAYER_AND_CONSOLE_ONLY;
+                if (!sender.hasPermission("pvpmaster.end")) return CheckResult.NO_PERMISSION;
+            }
+            case "clear" -> {
+                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender))
+                    return CheckResult.PLAYER_AND_CONSOLE_ONLY;
+                if (!sender.hasPermission("pvpmaster.clear")) return CheckResult.NO_PERMISSION;
+            }
+            case "register" -> {
+                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender))
+                    return CheckResult.PLAYER_AND_CONSOLE_ONLY;
+                if (!sender.hasPermission("pvpmaster.register")) return CheckResult.NO_PERMISSION;
+            }
+            case "unregister" -> {
+                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender))
+                    return CheckResult.PLAYER_AND_CONSOLE_ONLY;
+                if (!sender.hasPermission("pvpmaster.unregister")) return CheckResult.NO_PERMISSION;
+            }
+            case "help" -> {
+                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender))
+                    return CheckResult.PLAYER_AND_CONSOLE_ONLY;
+                if (!sender.hasPermission("pvpmaster.help")) return CheckResult.NO_PERMISSION;
+            }
+            case "" -> {
+                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender))
+                    return CheckResult.PLAYER_AND_CONSOLE_ONLY;
+            }
+            default -> throw new IllegalArgumentException("Bad subcommand.");
+        }
+        return CheckResult.SUCCESS;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        switch (command.getName().toLowerCase()) {
-            // enter for a game
-            case "in":
-                // fail
-                if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "This command can only be operated by players!");
+        if (!command.getName().equals("pvpmaster")) return true;
+        switch (checkSender(sender, args.length == 0 ? "" : args[0])) {
+            case PLAYER_ONLY -> {
+                sender.sendMessage(
+                        Component.text("This command can only be performed by players!", NamedTextColor.RED)
+                );
+                return true;
+            }
+            case PLAYER_AND_CONSOLE_ONLY -> {
+                sender.sendMessage(
+                        Component.text("This command can only be performed by players and the console!", NamedTextColor.RED)
+                );
+                return true;
+            }
+            case NO_PERMISSION -> {
+                sender.sendMessage(
+                        Component.text("You don't have the permission to perform this command!", NamedTextColor.RED)
+                );
+                return true;
+            }
+        }
+        if (args.length == 0) {
+            if (sender instanceof Player) {
+                StringBuilder sb = new StringBuilder("Usage: /");
+                sb.append(label);
+                sb.append(" (");
+                if (sender.hasPermission("pvpmaster.in")) sb.append("in|");
+                if (sender.hasPermission("pvpmaster.out")) sb.append("out|");
+                if (sender.hasPermission("pvpmaster.start")) sb.append("start|");
+                if (sender.hasPermission("pvpmaster.end")) sb.append("end|");
+                if (sender.hasPermission("pvpmaster.clear")) sb.append("clear|");
+                if (sender.hasPermission("pvpmaster.register")) sb.append("register|");
+                if (sender.hasPermission("pvpmaster.unregister")) sb.append("unregister|");
+                if (sender.hasPermission("pvpmaster.help")) sb.append("help|");
+                sb.deleteCharAt(sb.length() - 1);
+                sb.append(")");
+                sender.sendMessage(
+                        Component.text(sb.toString(), NamedTextColor.RED)
+                );
+            } else {
+                sender.sendMessage(
+                        Component.text("Usage: /" + label + " (start|end|clear|register|unregister|help)", NamedTextColor.RED)
+                );
+            }
+        }
+        switch (args[0]) {
+            case "in" -> {
+                if (args.length > 2) {
+                    sender.sendMessage(
+                            Component.text("Bad arguments. Usage: /" + label + " in [team]", NamedTextColor.RED)
+                    );
                     return true;
                 }
-                if (!sender.hasPermission("pvpmaster.in")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have the permission to participate in a game!");
+                Player p = (Player) sender;
+                if (players.contains(p)) {
+                    sender.sendMessage(
+                            Component.text("You have already signed up for the game!", NamedTextColor.RED)
+                    );
                     return true;
                 }
-                if (players.contains((Player) sender)) {
-                    sender.sendMessage(ChatColor.RED + "You have already signed up for the game!");
-                    return true;
-                }
-                // success
-                players.add((Player) sender);
-                sender.sendMessage(ChatColor.GREEN + "You will participate in the game!");
-                break;
-            // leave a game
-            case "out":
-                // fail
-                if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "This command can only be operated by players!");
-                    return true;
-                }
-                if (!sender.hasPermission("pvpmaster.out")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have the permission to leave a game!");
-                    return true;
-                }
-                if (!players.contains((Player) sender)) {
-                    sender.sendMessage(ChatColor.RED + "You haven't signed up for the game yet!");
-                    return true;
-                }
-                // success
-                players.remove((Player) sender);
-                sender.sendMessage(ChatColor.GREEN + "You will not participate in the game!");
-                break;
-            // start a game
-            case "start":
-                // fail
-                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender)) {
-                    sender.sendMessage(ChatColor.RED + "This command can only be operated by players or console!");
-                    return true;
-                }
-                if (!sender.hasPermission("pvpmaster.start")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have the permission to start a game!");
-                    return true;
-                }
-                // success
-
-                // configs
-                if (args.length >= 1) {
-                    seconds = Integer.parseInt(args[0]);
-                }
-                if (args.length >= 2) {
-                    teamCount = Integer.parseInt(args[1]);
-                    if (teamCount < 2 || teamCount > 4) {
-                        sender.sendMessage(ChatColor.RED + "Team count is invalid! 2-4 is acceptable.");
-                        return true;
+                if (args.length == 2) {
+                    if (teams.containsKey(args[1])) {
+                        teams.get(args[1]).addPlayer(p);
+                    } else {
+                        sender.sendMessage(
+                                Component.text("No team named " + args[1] + " exists!", NamedTextColor.YELLOW)
+                        );
                     }
                 }
-
-                // confirm to start
-                running = true;
-
-                // create world
-                mvwm.addWorld("pvp", World.Environment.NORMAL, null, WorldType.NORMAL, true, null);
-                break;
-            // end a game
-            case "end":
-                // fail
-                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender)) {
-                    sender.sendMessage(ChatColor.RED + "This command can only be operated by players or console!");
+                players.add(p);
+                sender.sendMessage(
+                        Component.text("You will participate in the game!", NamedTextColor.GREEN)
+                );
+            }
+            case "out" -> {
+                if (args.length != 1) {
+                    sender.sendMessage(
+                            Component.text("Bad arguments. Usage: /" + label + " out", NamedTextColor.RED)
+                    );
                     return true;
                 }
-                if (!sender.hasPermission("pvpmaster.end")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have the permission to end a game!");
+                Player p = (Player) sender;
+                if (!players.contains(p)) {
+                    sender.sendMessage(
+                            Component.text("You haven't signed up for the game yet!", NamedTextColor.RED)
+                    );
+                    return true;
+                }
+                for (Team team : teams.values()) {
+                    team.removePlayer(p);
+                }
+                players.remove(p);
+                sender.sendMessage(
+                        Component.text("You will not participate in the game!", NamedTextColor.GREEN)
+                );
+            }
+            case "start" -> {
+                if (args.length > 3) {
+                    sender.sendMessage(
+                            Component.text("Bad arguments. Usage: /" + label + " start [seconds] [teamCount]", NamedTextColor.RED)
+                    );
+                    return true;
+                }
+                switch (args.length) {
+                    case 3:
+                        teamCount = Integer.parseInt(args[1]);
+                        if (teamCount < 2 || teamCount > 15) {
+                            sender.sendMessage(
+                                    Component.text("Invalid team count. 2-15 (inclusive) is acceptable.", NamedTextColor.RED)
+                            );
+                            return true;
+                        }
+                        if (players.size() < teamCount) {
+                            sender.sendMessage(
+                                    Component.text("There are more teams than players!", NamedTextColor.RED)
+                            );
+                            return true;
+                        }
+                        randomTeaming = true;
+                    case 2:
+                        seconds = Integer.parseInt(args[0]);
+                }
+                running = true;
+                if (mvwm.isMVWorld("pvp")) {
+                    if (mvwm.getUnloadedWorlds().contains("pvp")) mvwm.loadWorld("pvp");
+                    Bukkit.getScheduler().runTaskLater(this, this::startGame, 30*20L);
+                } else {
+                    mvwm.addWorld("pvp", World.Environment.NORMAL, null, WorldType.NORMAL, true, null);
+                }
+            }
+            // end a game
+            case "end" -> {
+                if (args.length != 1) {
+                    sender.sendMessage(
+                            Component.text("Bad arguments. Usage: /" + label + " end", NamedTextColor.RED)
+                    );
                     return true;
                 }
                 // success
@@ -162,127 +289,193 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                 // free up the resources
                 Bukkit.getScheduler().cancelTask(timerTask);
                 Bukkit.getScheduler().cancelTask(meetupTask);
-                for (Team t: teams) {
-                    t.unregister();
+                for (Team t : teams.values()) {
+                    for (Player p: players) {
+                        t.removePlayer(p);
+                    }
                 }
-                teams.clear();
                 mvwm.deleteWorld("pvp", true, true);
-                for (Player p: players) {
+                for (Player p : players) {
                     p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
                 }
-                break;
+            }
             // clear player list
-            case "reset":
-                // fail
-                if (!(sender instanceof Player || sender instanceof ConsoleCommandSender)) {
-                    sender.sendMessage(ChatColor.RED + "This command can only be operated by players or console!");
-                    return true;
-                }
-                if (!sender.hasPermission("pvpmaster.reset")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have the permission to reset the player list!");
+            case "clear" -> {
+                if (args.length != 1) {
+                    sender.sendMessage(
+                            Component.text("Bad arguments. Usage: /" + label + " clear", NamedTextColor.RED)
+                    );
                     return true;
                 }
                 // success
+                for (Team t : teams.values()) {
+                    for (Player p: players) {
+                        t.removePlayer(p);
+                    }
+                }
                 players.clear();
-                sender.sendMessage(ChatColor.GREEN + "The player list has been cleared.");
+                sender.sendMessage(
+                        Component.text("The player list has been cleared.", NamedTextColor.GREEN)
+                );
+            }
+            case "register" -> {
+                if (args.length != 3) {
+                    sender.sendMessage(
+                            Component.text("Bad arguments. Usage: /" + label + " register <name> <color>", NamedTextColor.RED)
+                    );
+                    return true;
+                }
+                if (teams.containsKey(args[1])) {
+                    sender.sendMessage(
+                            Component.text("A team of this name already exists!", NamedTextColor.RED)
+                    );
+                    return true;
+                }
+                teams.put(args[1], scoreboard.registerNewTeam("pvp"+args[1]));
+                teams.get(args[1]).color(NamedTextColor.NAMES.value(args[2]));
+            }
+            case "unregister" -> {
+                if (args.length != 2) {
+                    sender.sendMessage(
+                            Component.text("Bad arguments. Usage: /" + label + " unregister <name>", NamedTextColor.RED)
+                    );
+                    return true;
+                }
+                if (!teams.containsKey(args[1])) {
+                    sender.sendMessage(
+                            Component.text("A team of this name doesn't exist!", NamedTextColor.RED)
+                    );
+                    return true;
+                }
+                teams.get(args[1]).unregister();
+                teams.remove(args[1]);
+            }
         }
         return true;
     }
 
     @EventHandler
-    private void onWorldLoad(WorldLoadEvent event) {
+    public void onWorldLoad(WorldLoadEvent event) {
         // if world load finished
         if (event.getWorld().getName().equals("pvp")) {
-            // prevent unwanted game start
-            if (!running) return;
-
-            // world settings
-            MultiverseWorld world = mvwm.getMVWorld("pvp");
-            world.setGameMode(GameMode.SURVIVAL);
-            world.setDifficulty(Difficulty.NORMAL);
-
-            // teaming (random)
-            teams = new ArrayList<>();                      // init team array
-            ArrayList<Player> toBeAdded = new ArrayList<>(players);             // copy player list
-            int maxTeamSize = (int) Math.ceil(((double)toBeAdded.size()) / teamCount);      // get max team size
-            Random random = new Random(ZonedDateTime.now().toEpochSecond());                // teaming random
-            for (int i = 0; i < teamCount; i++) {                       // for every team:
-                Team t = scoreboard.registerNewTeam("pvp" + i);             // register team
-                t.color(namedTextColors[i]);                                // change color according to a given pattern
-                for (int j = 0; j < Math.min(maxTeamSize, toBeAdded.size()); j++) {
-                    int index = random.nextInt(toBeAdded.size());           // take a free player and add him to the team
-                    t.addEntry(toBeAdded.get(index).getName());
-                    toBeAdded.remove(index);                                // he's not free anymore!
-                }
-                teams.add(t);                                           // this team has done config, remove it.
-            }
-
-            // pre-teleport preparations
-            Location spawnLoc = world.getSpawnLocation();
-            int spawnX = spawnLoc.getBlockX();
-            int spawnZ = spawnLoc.getBlockZ();
-
-            // actual teleporting scripts
-            ArrayList<CompletableFuture<Void>> teamFutures = new ArrayList<>();
-            for (Team t: teams) {
-                Random teamRandom = new Random(ZonedDateTime.now().toEpochSecond()); // team random
-                int teamX = getOffsetedInt(teamRandom, spawnX, 100, 800);           // team center
-                int teamZ = getOffsetedInt(teamRandom, spawnZ, 100, 800);
-                teamFutures.add(spreadTeamPlayers(world, t, teamRandom, teamX, teamZ)); // spread team players from the team center
-            }
-
-            CompletableFuture<Void> gameFuture = CompletableFuture.allOf(teamFutures.toArray(new CompletableFuture[teamFutures.size()]));
-                                                                                // check if all teams are ready
-            gameFuture.whenComplete((void1, t1) -> {                            // start the timer after all teams are ready
-
-                // meetup timer
-                AtomicInteger countdownSeconds = new AtomicInteger(seconds);
-                timerTask = (Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
-                    for (Player p: players) {
-                        p.sendActionBar(Component.text("").color(NamedTextColor.GREEN).append(Component.text("Time before meetup: " + countdownSeconds.getAndDecrement())));
-                    }
-                }, 0, 20));
-
-                // meetup teleport task
-                meetupTask = Bukkit.getScheduler().scheduleSyncDelayedTask(this, () -> {
-                    Bukkit.getScheduler().cancelTask(timerTask);                // stop timer
-
-                    // a small team & player spread
-                    for (Team t: teams) {
-
-                        // team center
-                        Random newTeamRandom = new Random(ZonedDateTime.now().toEpochSecond());
-                        int newTeamX = getOffsetedInt(newTeamRandom, spawnX, 70, 100);
-                        int newTeamZ = getOffsetedInt(newTeamRandom, spawnZ, 70, 100);
-
-                        for (Player p : t.getEntries().stream().map(Bukkit::getPlayer).toList()) {
-                            // player center
-                            int playerX = getOffsetedInt(newTeamRandom, newTeamX, 0, 3);
-                            int playerZ = getOffsetedInt(newTeamRandom, newTeamZ, 0, 3);
-                            final Location playerLoc = new Location(world.getCBWorld(), playerX, world.getCBWorld().getHighestBlockYAt(playerX, playerZ), playerZ);
-                            world.getCBWorld().getChunkAtAsync(playerLoc, true).whenComplete((chunk, throwable1) -> {
-                                p.teleport(playerLoc);
-                                p.addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, 200, 4));
-                            }); // just for safety
-                        }
-                    }
-                }, seconds * 20L);
-            });
-
+            Bukkit.getScheduler().runTaskLater(this, this::startGame, 30*20L);
         }
     }
 
-    private CompletableFuture<Void> spreadTeamPlayers(MultiverseWorld world, Team t, Random teamRandom, int teamX, int teamZ) {
+    private void startGame() {
+        // prevent unwanted game start
+        if (!running) return;
+
+        // world settings
+        MultiverseWorld world = mvwm.getMVWorld("pvp");
+        world.setGameMode(GameMode.SURVIVAL);
+        world.setDifficulty(Difficulty.NORMAL);
+
+        // random teaming
+        if (randomTeaming) {
+            for (Team t : teams.values()) {
+                for (Player p: players) {
+                    t.removePlayer(p);
+                }
+            }
+            ArrayList<Player> toBeAdded = new ArrayList<>(players);
+            Random teamingRandom = new Random(ZonedDateTime.now().toEpochSecond());
+            Collections.shuffle(toBeAdded, teamingRandom);
+            // evenly distribute first (ignore the remainders)
+            int evenlyDistribute = players.size() / teamCount;
+            if (teamCount > teams.size()) {
+                Iterator<NamedTextColor> colors = NamedTextColor.NAMES.values().iterator();
+                for (int i = 0; i < teamCount - teams.size(); i++) {
+                    NamedTextColor color = colors.next();
+                    if (teams.values().stream().map(Team::color).map(TextColor::value).anyMatch(v -> v == color.value())) {
+                        continue;
+                    }
+                    teams.put(color.toString(), scoreboard.registerNewTeam("pvp" + color));
+                    teams.get(color.toString()).color(color);
+                }
+            }
+            Iterator<Team> teamIterator = teams.values().iterator();
+            int index = 0;
+            for (int i = 0; i < teamCount; i++) {
+                Team team = teamIterator.next();
+                for (int j = 0; j < evenlyDistribute; j++) {
+                    team.addPlayer(toBeAdded.get(index));
+                    index++;
+                }
+            }
+            int remainder = players.size() % teamCount;
+            teamIterator = teams.values().iterator();
+            for (int i = 0; i < remainder; i++) {
+                teamIterator.next().addPlayer(toBeAdded.get(index));
+                index++;
+            }
+        }
+
+        // pre-teleport preparations
+        Location spawnLoc = world.getSpawnLocation();
+        int spawnX = spawnLoc.getBlockX();
+        int spawnZ = spawnLoc.getBlockZ();
+
+        // actual teleporting scripts
+        ArrayList<CompletableFuture<Void>> teamFutures = new ArrayList<>();
+        for (Team team : teams.values()) {
+            Random teamRandom = new Random(ZonedDateTime.now().toEpochSecond()); // team random
+            int teamX = getOffsetedInt(teamRandom, spawnX, 100, 800);           // team center
+            int teamZ = getOffsetedInt(teamRandom, spawnZ, 100, 800);
+            teamFutures.add(spreadTeamPlayers(world, team, teamRandom, teamX, teamZ)); // spread team players from the team center
+        }
+
+        CompletableFuture<Void> gameFuture = CompletableFuture.allOf(teamFutures.toArray(new CompletableFuture[0]));
+        // check if all teams are ready
+        gameFuture.whenComplete((_void, _throwable) -> {                            // start the timer after all teams are ready
+
+            // meetup timer
+            AtomicInteger countdownSeconds = new AtomicInteger(seconds);
+            timerTask = (Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
+                for (Player p : players) {
+                    p.sendActionBar(Component.text("").color(NamedTextColor.GREEN).append(Component.text("Time before meetup: " + countdownSeconds)));
+                }
+                countdownSeconds.decrementAndGet();
+            }, 0, 20));
+
+            // meetup teleport task
+            meetupTask = Bukkit.getScheduler().scheduleSyncDelayedTask(this, () -> {
+                Bukkit.getScheduler().cancelTask(timerTask);                // stop timer
+
+                // a small team & player spread
+                for (Team t : teams.values()) {
+
+                    // team center
+                    Random newTeamRandom = new Random(ZonedDateTime.now().toEpochSecond());
+                    int newTeamX = getOffsetedInt(newTeamRandom, spawnX, 70, 100);
+                    int newTeamZ = getOffsetedInt(newTeamRandom, spawnZ, 70, 100);
+
+                    for (Player p : t.getEntries().stream().map((name) -> Objects.requireNonNull(Bukkit.getPlayer(name))).toList()) {
+                        // player center
+                        int playerX = getOffsetedInt(newTeamRandom, newTeamX, 0, 3);
+                        int playerZ = getOffsetedInt(newTeamRandom, newTeamZ, 0, 3);
+                        final Location playerLoc = new Location(world.getCBWorld(), playerX, world.getCBWorld().getHighestBlockYAt(playerX, playerZ) + 1, playerZ);
+                        world.getCBWorld().getChunkAtAsyncUrgently(playerLoc, true).whenComplete((chunk, throwable1) -> {
+                            p.teleport(playerLoc);
+                            p.addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, 200, 4));
+                        }); // just for safety
+                    }
+                }
+            }, seconds * 20L);
+        });
+    }
+
+    private CompletableFuture<Void> spreadTeamPlayers(MultiverseWorld world, Team team, Random teamRandom, int teamX, int teamZ) {
 
         ArrayList<CompletableFuture<?>> individualFutures = new ArrayList<>();                  // for team meetup task
 
-        for (Player p: t.getEntries().stream().map(Bukkit::getPlayer).toList()) {
+        for (Player p : team.getEntries().stream().map((name) -> Objects.requireNonNull(Bukkit.getPlayer(name))).toList()) {
 
             int playerX = getOffsetedInt(teamRandom, teamX, 0, 3);                              // player center based on team center
             int playerZ = getOffsetedInt(teamRandom, teamZ, 0, 3);
             final Location playerLoc = new Location(world.getCBWorld(), playerX, world.getCBWorld().getHighestBlockYAt(playerX, playerZ), playerZ);
 
-            CompletableFuture<Chunk> playerFuture = world.getCBWorld().getChunkAtAsync(playerLoc, true);        // load chunk before teleporting the player
+            CompletableFuture<Chunk> playerFuture = world.getCBWorld().getChunkAtAsyncUrgently(playerLoc, true);        // load chunk before teleporting the player
             individualFutures.add(playerFuture);
 
             playerFuture.whenComplete((chunk, throwable) -> {                                   // once chunk is loaded
@@ -304,9 +497,8 @@ public final class PVPMaster extends JavaPlugin implements Listener {
             });
         }
 
-        CompletableFuture<Void> teamFuture = CompletableFuture.allOf(individualFutures.toArray(new CompletableFuture[t.getSize()]));
-                                                        // if all team members have completed their task, team task will trigger
-        return teamFuture;
+        // if all team members have completed their task, team task will trigger
+        return CompletableFuture.allOf(individualFutures.toArray(new CompletableFuture[team.getSize()]));
     }
 
     private int getOffsetedInt(Random random, int original, int start, int end) { // easy to understand, no comments
@@ -320,9 +512,47 @@ public final class PVPMaster extends JavaPlugin implements Listener {
     }
 
     @Override
+    public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
+        if (!command.getName().equals("pvpmaster")) return null;
+        return switch (args.length) {
+            case 1 ->
+                Arrays.stream(subcommands).sorted().filter(new StartsWithPredicate(args[0])).toList();
+            case 2 ->
+                switch (args[0]) {
+                    case "in", "unregister" -> teams.keySet().stream().sorted().filter(new StartsWithPredicate(args[1])).toList();
+                    case "help" -> Arrays.stream(subcommands).sorted().filter(new StartsWithPredicate(args[1])).toList();
+                    default -> null;
+                };
+            case 3 ->
+                args[0].equals("register") ? NamedTextColor.NAMES.keys().stream().sorted().filter(new StartsWithPredicate(args[2])).toList() : null;
+            default -> null;
+        };
+    }
+
+    @Override
     public void onDisable() {
         // Plugin shutdown logic
         // free up resources
         HandlerList.unregisterAll((Plugin) this);
+    }
+
+    private enum CheckResult {
+        SUCCESS,
+        NO_PERMISSION,
+        PLAYER_ONLY,
+        PLAYER_AND_CONSOLE_ONLY
+    }
+
+    private static class StartsWithPredicate implements Predicate<String> {
+        String prefix;
+
+        public StartsWithPredicate(String prefix) {
+            this.prefix = prefix;
+        }
+
+        @Override
+        public boolean test(String s) {
+            return s.startsWith(prefix);
+        }
     }
 }
