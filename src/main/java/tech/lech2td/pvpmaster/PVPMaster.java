@@ -86,13 +86,13 @@ public final class PVPMaster extends JavaPlugin implements Listener {
     }
 
     private CheckResult checkSender(CommandSender sender, String subcommand) {
-        if (!(sender.hasPermission("pvpmaster.in") &&
-                sender.hasPermission("pvpmaster.out") &&
-                sender.hasPermission("pvpmaster.start") &&
-                sender.hasPermission("pvpmaster.end") &&
-                sender.hasPermission("pvpmaster.clear") &&
-                sender.hasPermission("pvpmaster.register") &&
-                sender.hasPermission("pvpmaster.unregister") &&
+        if (!(sender.hasPermission("pvpmaster.in") ||
+                sender.hasPermission("pvpmaster.out") ||
+                sender.hasPermission("pvpmaster.start") ||
+                sender.hasPermission("pvpmaster.end") ||
+                sender.hasPermission("pvpmaster.clear") ||
+                sender.hasPermission("pvpmaster.register") ||
+                sender.hasPermission("pvpmaster.unregister") ||
                 sender.hasPermission("pvpmaster.help")))
             return CheckResult.NO_PERMISSION;
         switch (subcommand) {
