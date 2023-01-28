@@ -277,7 +277,9 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                 mvwm.deleteWorld("pvp", true, true);
                 for (Player p : players) {
                     p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+                    p.getInventory().clear();
                 }
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "advancement revoke @a everything");
             }
             // clear player list
             case "clear" -> {
