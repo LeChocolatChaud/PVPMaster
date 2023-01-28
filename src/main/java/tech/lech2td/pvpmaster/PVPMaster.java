@@ -15,6 +15,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -44,6 +45,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
     private int meetupTask;
 
     // tab completes
+    private final String[] defaultSubcommands = new String[] {"in", "out", "help"};
     private final String[] subcommands = new String[] {"in", "out", "start", "end", "clear", "register", "unregister", "help"};
 
     // configs
@@ -529,6 +531,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
             playerFuture.whenComplete((chunk, throwable) -> {                                   // once chunk is loaded
 
                 p.teleport(playerLoc);                                                          // teleport him!
+                p.setBedSpawnLocation(playerLoc, true);
 
                 Inventory inventory = p.getInventory();                                         // basic stuffs
                 inventory.clear();
@@ -564,7 +567,9 @@ public final class PVPMaster extends JavaPlugin implements Listener {
         if (!command.getName().equals("pvpmaster")) return null;
         return switch (args.length) {
             case 1 ->
-                Arrays.stream(subcommands).sorted().filter(new StartsWithPredicate(args[0])).toList();
+                sender.hasPermission("pvpmaster.admin") ?
+                        Arrays.stream(subcommands).sorted().filter(new StartsWithPredicate(args[0])).toList() :
+                        Arrays.stream(defaultSubcommands).sorted().filter(new StartsWithPredicate(args[0])).toList();
             case 2 ->
                 switch (args[0]) {
                     case "in", "unregister" -> teams.keySet().stream().sorted().filter(new StartsWithPredicate(args[1])).toList();
@@ -575,6 +580,44 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                 args[0].equals("register") ? NamedTextColor.NAMES.keys().stream().sorted().filter(new StartsWithPredicate(args[2])).toList() : null;
             default -> null;
         };
+    }
+
+    @EventHandler
+    public void onPlayerTeleport(PlayerTeleportEvent event) {
+        if (!running) return;
+        if (!event.getCause().equals(PlayerTeleportEvent.TeleportCause.COMMAND)) return;
+        Player sender = event.getPlayer();
+        ArrayList<Player> teleportToPlayers = new ArrayList<>();
+        Location teleportToLocation = event.getTo();
+        for (Player p : players) {
+            if (p.getBoundingBox().contains(teleportToLocation.toVector()))
+                teleportToPlayers.add(p);
+        }
+        if (!players.contains(event.getPlayer())) {
+            if (teleportToPlayers.size() == 0) return;
+            sender.sendMessage(
+                    Component.text("You can't teleport to a player in the game!", NamedTextColor.RED)
+            );
+            event.setCancelled(true);
+            return;
+        }
+        if (teleportToPlayers.size() == 0) {
+            sender.sendMessage(
+                    Component.text("You can't teleport to a player out of the game!", NamedTextColor.RED)
+            );
+            event.setCancelled(true);
+            return;
+        }
+        boolean canTeleport = false;
+        for (Player p: teleportToPlayers) {
+            canTeleport = canTeleport || Objects.equals(scoreboard.getPlayerTeam(p), scoreboard.getPlayerTeam(sender));
+        }
+        if (!canTeleport) {
+            sender.sendMessage(
+                    Component.text("You can't teleport to a player out of your team!", NamedTextColor.RED)
+            );
+            event.setCancelled(true);
+        }
     }
 
     @Override
