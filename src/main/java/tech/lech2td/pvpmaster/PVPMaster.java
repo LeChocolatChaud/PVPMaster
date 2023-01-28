@@ -360,7 +360,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
             );
         } else {
             sender.sendMessage(
-                    Component.text("Usage: /" + label + " (start|end|clear|register|unregister|help)", NamedTextColor.RED)
+                    Component.text("Usage: /" + label + " (start|end|clear|register|unregister|help)", NamedTextColor.YELLOW)
             );
         }
     }
