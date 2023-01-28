@@ -167,28 +167,8 @@ public final class PVPMaster extends JavaPlugin implements Listener {
             }
         }
         if (args.length == 0) {
-            if (sender instanceof Player) {
-                StringBuilder sb = new StringBuilder("Usage: /");
-                sb.append(label);
-                sb.append(" (");
-                if (sender.hasPermission("pvpmaster.in")) sb.append("in|");
-                if (sender.hasPermission("pvpmaster.out")) sb.append("out|");
-                if (sender.hasPermission("pvpmaster.start")) sb.append("start|");
-                if (sender.hasPermission("pvpmaster.end")) sb.append("end|");
-                if (sender.hasPermission("pvpmaster.clear")) sb.append("clear|");
-                if (sender.hasPermission("pvpmaster.register")) sb.append("register|");
-                if (sender.hasPermission("pvpmaster.unregister")) sb.append("unregister|");
-                if (sender.hasPermission("pvpmaster.help")) sb.append("help|");
-                sb.deleteCharAt(sb.length() - 1);
-                sb.append(")");
-                sender.sendMessage(
-                        Component.text(sb.toString(), NamedTextColor.RED)
-                );
-            } else {
-                sender.sendMessage(
-                        Component.text("Usage: /" + label + " (start|end|clear|register|unregister|help)", NamedTextColor.RED)
-                );
-            }
+            showHelp(sender, label);
+            return true;
         }
         switch (args[0]) {
             case "in" -> {
@@ -350,8 +330,74 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                 teams.get(args[1]).unregister();
                 teams.remove(args[1]);
             }
+            case "help" -> {
+                switch (args.length) {
+                    case 1 -> showHelp(sender, label);
+                    case 2 -> showHelp(sender, label, args[1]);
+                }
+            }
         }
         return true;
+    }
+
+    private void showHelp(@NotNull CommandSender sender, @NotNull String label) {
+        if (sender instanceof Player) {
+            StringBuilder sb = new StringBuilder("Usage: /");
+            sb.append(label);
+            sb.append(" (");
+            if (sender.hasPermission("pvpmaster.in")) sb.append("in|");
+            if (sender.hasPermission("pvpmaster.out")) sb.append("out|");
+            if (sender.hasPermission("pvpmaster.start")) sb.append("start|");
+            if (sender.hasPermission("pvpmaster.end")) sb.append("end|");
+            if (sender.hasPermission("pvpmaster.clear")) sb.append("clear|");
+            if (sender.hasPermission("pvpmaster.register")) sb.append("register|");
+            if (sender.hasPermission("pvpmaster.unregister")) sb.append("unregister|");
+            if (sender.hasPermission("pvpmaster.help")) sb.append("help|");
+            sb.deleteCharAt(sb.length() - 1);
+            sb.append(")");
+            sender.sendMessage(
+                    Component.text(sb.toString(), NamedTextColor.YELLOW)
+            );
+        } else {
+            sender.sendMessage(
+                    Component.text("Usage: /" + label + " (start|end|clear|register|unregister|help)", NamedTextColor.RED)
+            );
+        }
+    }
+
+    private void showHelp(@NotNull CommandSender sender, @NotNull String label, @NotNull String subcommand) {
+        switch (subcommand) {
+            case "in" -> {
+                if (!(sender instanceof Player)) return;
+                sender.sendMessage(
+                        Component.text("Usage: /" + label + " in [team]", NamedTextColor.YELLOW)
+                );
+            }
+            case "out" -> {
+                if (!(sender instanceof Player)) return;
+                sender.sendMessage(
+                        Component.text("Usage: /" + label + " out", NamedTextColor.YELLOW)
+                );
+            }
+            case "start" -> sender.sendMessage(
+                    Component.text("Usage: /" + label + " start [seconds] [teamCount]", NamedTextColor.YELLOW)
+            );
+            case "end" -> sender.sendMessage(
+                    Component.text("Usage: /" + label + " end", NamedTextColor.YELLOW)
+            );
+            case "clear" -> sender.sendMessage(
+                    Component.text("Usage: /" + label + " clear", NamedTextColor.YELLOW)
+            );
+            case "register" -> sender.sendMessage(
+                    Component.text("Usage: /" + label + " register <name> <color>", NamedTextColor.YELLOW)
+            );
+            case "unregister" -> sender.sendMessage(
+                    Component.text("Usage: /" + label + " unregister <name>", NamedTextColor.YELLOW)
+            );
+            case "help" -> sender.sendMessage(
+                    Component.text("Usage: /" + label + " help [subcommand]", NamedTextColor.YELLOW)
+            );
+        }
     }
 
     @EventHandler
