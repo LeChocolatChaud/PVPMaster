@@ -7,6 +7,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
@@ -194,6 +195,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                         sender.sendMessage(
                                 Component.text("No team named " + args[1] + " exists!", NamedTextColor.YELLOW)
                         );
+                        return true;
                     }
                 }
                 players.add(p);
@@ -232,7 +234,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                 }
                 switch (args.length) {
                     case 3:
-                        teamCount = Integer.parseInt(args[1]);
+                        teamCount = Integer.parseInt(args[2]);
                         if (teamCount < 2 || teamCount > 15) {
                             sender.sendMessage(
                                     Component.text("Invalid team count. 2-15 (inclusive) is acceptable.", NamedTextColor.RED)
@@ -247,7 +249,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                         }
                         randomTeaming = true;
                     case 2:
-                        seconds = Integer.parseInt(args[0]);
+                        seconds = Integer.parseInt(args[1]);
                 }
                 running = true;
                 if (mvwm.isMVWorld("pvp")) {
@@ -504,8 +506,13 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                         // player center
                         int playerX = getOffsetedInt(newTeamRandom, newTeamX, 0, 3);
                         int playerZ = getOffsetedInt(newTeamRandom, newTeamZ, 0, 3);
-                        final Location playerLoc = new Location(world.getCBWorld(), playerX, world.getCBWorld().getHighestBlockYAt(playerX, playerZ) + 1, playerZ);
+                        final int groundY = world.getCBWorld().getHighestBlockYAt(playerX, playerZ);
+                        final Location playerLoc = new Location(world.getCBWorld(), playerX, groundY + 1, playerZ);
                         world.getCBWorld().getChunkAtAsyncUrgently(playerLoc, true).whenComplete((chunk, throwable1) -> {
+                            Block groundBlock = new Location(world.getCBWorld(), playerX, groundY, playerZ).getBlock();
+                            if (groundBlock.isLiquid() || groundBlock.isEmpty() || groundBlock.isPassable()) {
+                                groundBlock.setType(Material.STONE);
+                            }
                             p.teleport(playerLoc);
                             p.addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, 200, 4));
                         }); // just for safety
@@ -523,15 +530,21 @@ public final class PVPMaster extends JavaPlugin implements Listener {
 
             int playerX = getOffsetedInt(teamRandom, teamX, 0, 3);                              // player center based on team center
             int playerZ = getOffsetedInt(teamRandom, teamZ, 0, 3);
-            final Location playerLoc = new Location(world.getCBWorld(), playerX, world.getCBWorld().getHighestBlockYAt(playerX, playerZ), playerZ);
+            final int groundY = world.getCBWorld().getHighestBlockYAt(playerX, playerZ);
+            final Location playerLoc = new Location(world.getCBWorld(), playerX, groundY + 1, playerZ);
 
             CompletableFuture<Chunk> playerFuture = world.getCBWorld().getChunkAtAsyncUrgently(playerLoc, true);        // load chunk before teleporting the player
             individualFutures.add(playerFuture);
 
             playerFuture.whenComplete((chunk, throwable) -> {                                   // once chunk is loaded
 
+                Block groundBlock = new Location(world.getCBWorld(), playerX, groundY, playerZ).getBlock();
+                if (groundBlock.isLiquid() || groundBlock.isEmpty() || groundBlock.isPassable()) {
+                    groundBlock.setType(Material.STONE);
+                }
+
                 p.teleport(playerLoc);                                                          // teleport him!
-                p.setBedSpawnLocation(playerLoc, true);
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "execute in minecraft:pvp run spawnpoint " + p.getName() + " " + playerLoc.getBlockX() + " " + playerLoc.getBlockY() + " " + playerLoc.getBlockZ());
 
                 Inventory inventory = p.getInventory();                                         // basic stuffs
                 inventory.clear();
@@ -564,6 +577,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
+        ArrayList<String> emptyList = new ArrayList<>();
         if (!command.getName().equals("pvpmaster")) return null;
         return switch (args.length) {
             case 1 ->
@@ -574,11 +588,11 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                 switch (args[0]) {
                     case "in", "unregister" -> teams.keySet().stream().sorted().filter(new StartsWithPredicate(args[1])).toList();
                     case "help" -> Arrays.stream(subcommands).sorted().filter(new StartsWithPredicate(args[1])).toList();
-                    default -> null;
+                    default -> emptyList;
                 };
             case 3 ->
-                args[0].equals("register") ? NamedTextColor.NAMES.keys().stream().sorted().filter(new StartsWithPredicate(args[2])).toList() : null;
-            default -> null;
+                args[0].equals("register") ? NamedTextColor.NAMES.keys().stream().sorted().filter(new StartsWithPredicate(args[2])).toList() : emptyList;
+            default -> emptyList;
         };
     }
 
