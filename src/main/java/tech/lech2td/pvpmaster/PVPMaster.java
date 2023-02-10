@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
 public final class PVPMaster extends JavaPlugin implements Listener {
+    @SuppressWarnings("SpellCheckingInspection")
     private MVWorldManager mvwm;
 
     // logic related
@@ -58,6 +59,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
     private boolean randomTeaming = false;
 
     @Override
+    @SuppressWarnings("SpellCheckingInspection")
     public void onEnable() {
         // Plugin startup logic
 
@@ -472,8 +474,8 @@ public final class PVPMaster extends JavaPlugin implements Listener {
         ArrayList<CompletableFuture<Void>> teamFutures = new ArrayList<>();
         for (Team team : teams.values()) {
             Random teamRandom = new Random(ZonedDateTime.now().toEpochSecond()); // team random
-            int teamX = getOffsetedInt(teamRandom, spawnX, 100, 800);           // team center
-            int teamZ = getOffsetedInt(teamRandom, spawnZ, 100, 800);
+            int teamX = getOffsetInt(teamRandom, spawnX, 100, 800);           // team center
+            int teamZ = getOffsetInt(teamRandom, spawnZ, 100, 800);
             teamFutures.add(spreadTeamPlayers(world, team, teamRandom, teamX, teamZ)); // spread team players from the team center
         }
 
@@ -499,13 +501,13 @@ public final class PVPMaster extends JavaPlugin implements Listener {
 
                     // team center
                     Random newTeamRandom = new Random(ZonedDateTime.now().toEpochSecond());
-                    int newTeamX = getOffsetedInt(newTeamRandom, spawnX, 70, 100);
-                    int newTeamZ = getOffsetedInt(newTeamRandom, spawnZ, 70, 100);
+                    int newTeamX = getOffsetInt(newTeamRandom, spawnX, 70, 100);
+                    int newTeamZ = getOffsetInt(newTeamRandom, spawnZ, 70, 100);
 
                     for (Player p : t.getEntries().stream().map((name) -> Objects.requireNonNull(Bukkit.getPlayer(name))).toList()) {
                         // player center
-                        int playerX = getOffsetedInt(newTeamRandom, newTeamX, 0, 3);
-                        int playerZ = getOffsetedInt(newTeamRandom, newTeamZ, 0, 3);
+                        int playerX = getOffsetInt(newTeamRandom, newTeamX, 0, 3);
+                        int playerZ = getOffsetInt(newTeamRandom, newTeamZ, 0, 3);
                         final int groundY = world.getCBWorld().getHighestBlockYAt(playerX, playerZ);
                         final Location playerLoc = new Location(world.getCBWorld(), playerX, groundY + 1, playerZ);
                         world.getCBWorld().getChunkAtAsyncUrgently(playerLoc, true).whenComplete((chunk, throwable1) -> {
@@ -528,8 +530,8 @@ public final class PVPMaster extends JavaPlugin implements Listener {
 
         for (Player p : team.getEntries().stream().map((name) -> Objects.requireNonNull(Bukkit.getPlayer(name))).toList()) {
 
-            int playerX = getOffsetedInt(teamRandom, teamX, 0, 3);                              // player center based on team center
-            int playerZ = getOffsetedInt(teamRandom, teamZ, 0, 3);
+            int playerX = getOffsetInt(teamRandom, teamX, 0, 3);                              // player center based on team center
+            int playerZ = getOffsetInt(teamRandom, teamZ, 0, 3);
             final int groundY = world.getCBWorld().getHighestBlockYAt(playerX, playerZ);
             final Location playerLoc = new Location(world.getCBWorld(), playerX, groundY + 1, playerZ);
 
@@ -565,7 +567,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
         return CompletableFuture.allOf(individualFutures.toArray(new CompletableFuture[team.getSize()]));
     }
 
-    private int getOffsetedInt(Random random, int original, int start, int end) { // easy to understand, no comments
+    private int getOffsetInt(Random random, int original, int start, int end) { // easy to understand, no comments
         int offset = random.nextInt(start, end);
         boolean minus = random.nextBoolean();
         if (minus) {
