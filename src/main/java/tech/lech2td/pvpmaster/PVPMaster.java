@@ -517,9 +517,15 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                             }
                             p.teleport(playerLoc);
                             p.addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, 200, 4));
+                            p.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 1000000, 1));
                         }); // just for safety
                     }
                 }
+
+                // set world border to 400*400
+                WorldBorder border = world.getCBWorld().getWorldBorder();
+                border.setCenter(spawnX, spawnZ);
+                border.setSize(400);
             }, seconds * 20L);
         });
     }
