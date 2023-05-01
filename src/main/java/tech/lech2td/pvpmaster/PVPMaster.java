@@ -16,6 +16,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.inventory.Inventory;
@@ -41,6 +43,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
 
     // logic related
     private ArrayList<Player> players;
+    private HashMap<String, double[]> quitPlayerIds;
     private HashMap<String, Team> teams;
     private Scoreboard scoreboard;
     private int timerTask;
@@ -70,6 +73,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
 
         // logic related inits
         players = new ArrayList<>();
+        quitPlayerIds = new HashMap<>();
         teams = new HashMap<>();
         scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
 
@@ -286,6 +290,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                     p.getInventory().clear();
                 }
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "advancement revoke @a everything");
+                quitPlayerIds.clear();
             }
             // clear player list
             case "clear" -> {
@@ -518,6 +523,7 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                             p.teleport(playerLoc);
                             p.addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, 200, 4));
                             p.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 1000000, 1));
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "execute in minecraft:pvp run spawnpoint " + p.getName() + " " + spawnLoc.getBlockX() + " " + spawnLoc.getBlockY() + " " + spawnLoc.getBlockZ());
                         }); // just for safety
                     }
                 }
@@ -639,6 +645,45 @@ public final class PVPMaster extends JavaPlugin implements Listener {
                     Component.text("You can't teleport to a player out of your team!", NamedTextColor.RED)
             );
             event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        if (!running) return;
+        Player player = event.getPlayer();
+        if (players.contains(player)) {
+            players.remove(player);
+            double[] locArray = {
+                    player.getLocation().getX(),
+                    player.getLocation().getY(),
+                    player.getLocation().getZ(),
+                    player.getLocation().getYaw(),
+                    player.getLocation().getPitch()
+            };
+            quitPlayerIds.put(player.getUniqueId().toString(), locArray);
+            player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+        }
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (!running) return;
+        Player player = event.getPlayer();
+        if (quitPlayerIds.containsKey(player.getUniqueId().toString())) {
+            double[] locArray = quitPlayerIds.get(player.getUniqueId().toString());
+            Location loc = new Location(
+                    mvwm.getMVWorld("pvp").getCBWorld(),
+                    locArray[0],
+                    locArray[1],
+                    locArray[2],
+                    (float) locArray[3],
+                    (float) locArray[4]
+            );
+            player.teleport(loc);
+            quitPlayerIds.remove(player.getUniqueId().toString());
+            players.add(player);
+            player.setScoreboard(scoreboard);
         }
     }
 
